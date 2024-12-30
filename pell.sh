@@ -128,7 +128,7 @@ EOF
 
 # reset
 pellcored tendermint unsafe-reset-all --home $HOME/.pellcored --keep-addr-book
-curl https://server-5.itrocket.net/testnet/pell/pell_2024-12-26_288738_snap.tar.lz4 | lz4 -dc - | tar -xf - -C $HOME/.pellcored
+curl https://server-5.itrocket.net/testnet/pell/pell_2024-12-30_341149_snap.tar.lz4 | lz4 -dc - | tar -xf - -C $HOME/.pellcored
 
 # start service
 sudo systemctl daemon-reload
