@@ -1,0 +1,142 @@
+# Manual node setup
+If you want to setup fullnode manually follow the steps below
+
+## Setting up vars
+Here you have to put name of your moniker (validator) that will be visible in explorer
+```
+NODENAME=<YOUR_MONIKER_NAME>
+```
+
+Save and import variables into system
+```
+echo "export NODENAME=$NODENAME" >> $HOME/.bash_profile
+if [ ! $WALLET ]; then
+	echo "export WALLET=wallet" >> $HOME/.bash_profile
+fi
+echo "export PELL_CHAIN_ID=ignite_186-1" >> $HOME/.bash_profile
+source $HOME/.bash_profile
+```
+
+## Update packages
+```
+sudo apt update && sudo apt upgrade -y
+```
+
+## Install dependencies
+```
+apt install curl iptables build-essential git wget jq make gcc nano tmux htop nvme-cli pkg-config libssl-dev libleveldb-dev tar clang bsdmainutils ncdu unzip libleveldb-dev lz4 -y
+```
+
+## Install go
+```
+VER="1.22.3"
+wget "https://golang.org/dl/go$VER.linux-amd64.tar.gz"
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz"
+rm "go$VER.linux-amd64.tar.gz"
+[ ! -f ~/.bash_profile ] && touch ~/.bash_profile
+echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
+source $HOME/.bash_profile
+[ ! -d ~/go/bin ] && mkdir -p ~/go/bin
+```
+
+## Download and build binaries
+```
+cd $HOME
+wget -O pellcored https://github.com/0xPellNetwork/network-config/releases/download/v1.1.1-ignite/pellcored-v1.1.1-linux-amd64
+chmod +x pellcored
+mv pellcored ~/go/bin/
+WASMVM_VERSION=v2.1.2
+export LD_LIBRARY_PATH=~/.pellcored/lib
+mkdir -p $LD_LIBRARY_PATH
+wget "https://github.com/CosmWasm/wasmvm/releases/download/$WASMVM_VERSION/libwasmvm.$(uname -m).so" -O "$LD_LIBRARY_PATH/libwasmvm.$(uname -m).so"
+echo "export LD_LIBRARY_PATH=$HOME/.pellcored/lib:$LD_LIBRARY_PATH" >> $HOME/.bash_profile
+source ~/.bash_profile
+```
+
+## Config app
+```
+pellcored config chain-id ignite_186-1
+pellcored config keyring-backend test
+```
+
+## Init app
+```
+pellcored init $NODENAME --chain-id ignite_186-1
+```
+
+## Download genesis and addrbook
+```
+wget -O $HOME/.pellcored/config/genesis.json https://server-5.itrocket.net/testnet/pell/genesis.json
+wget -O $HOME/.pellcored/config/addrbook.json  https://server-5.itrocket.net/testnet/pell/addrbook.json
+```
+
+## Set seeds and peers
+```
+SEEDS=""
+PEERS="d003cb808ae91bad032bb94d19c922fe094d8556@pell-testnet-peer.itrocket.net:58656,2138f4465af895212d3653b6ef5fe60e9a86fe69@195.26.246.24:26656,bfb2a7a01bd7cc5083e5511062e4aec2342a99d4@152.53.51.57:57656,8d8e9a8a8798dc908db43c65b147a15a3da2c66f@95.217.61.32:57656,49c8dae85948784049b81fa4359be585d84075fe@5.252.52.129:26656,9b955d07f05b02b3d622f9cb7a0e6cfecd719985@34.87.47.193:26656,c48f85fa3049b3cc66d07971435f143f275c3659@212.56.33.139:22656,4cad46992872f86da794f47ab662592bf9ca500a@135.181.79.242:57656,73270186a4ed6a4136a2c02274867c0c41c304dd@46.4.91.76:30356,cc9acce34ac781b76be5c9f7d9f1ed307331de06@94.72.118.149:57656"
+sed -i -e "s/^seeds *=.*/seeds = \"$SEEDS\"/; s/^persistent_peers *=.*/persistent_peers = \"$PEERS\"/" $HOME/.pellcored/config/config.toml
+```
+
+## Config pruning
+```
+indexer="null"
+sed -i -e "s/^indexer *=.*/indexer = \"$indexer\"/" $HOME/.pellcored/config/config.toml
+
+pruning="custom"
+pruning_keep_recent="100"
+pruning_keep_every="0"
+pruning_interval="10"
+sed -i -e "s/^pruning *=.*/pruning = \"$pruning\"/" $HOME/.pellcored/config/app.toml
+sed -i -e "s/^pruning-keep-recent *=.*/pruning-keep-recent = \"$pruning_keep_recent\"/" $HOME/.pellcored/config/app.toml
+sed -i -e "s/^pruning-keep-every *=.*/pruning-keep-every = \"$pruning_keep_every\"/" $HOME/.pellcored/config/app.toml
+sed -i -e "s/^pruning-interval *=.*/pruning-interval = \"$pruning_interval\"/" $HOME/.pellcored/config/app.toml
+sed -i "s/snapshot-interval *=.*/snapshot-interval = 0/g" $HOME/.pellcored/config/app.toml
+```
+
+## Set minimum gas price and timeout commit
+```
+sed -i -e "s|^minimum-gas-prices *=.*|minimum-gas-prices = \"0apell\"|" $HOME/.pellcored/config/app.toml
+```
+
+## Enable prometheus
+```
+sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.pellcored/config/config.toml
+```
+
+## Reset chain data
+```
+pellcored tendermint unsafe-reset-all --home $HOME/.pellcored --keep-addr-book
+```
+
+## Create service
+```
+sudo tee /etc/systemd/system/pellcored.service > /dev/null <<EOF
+[Unit]
+Description=Pell node
+After=network-online.target
+[Service]
+User=$USER
+WorkingDirectory=$HOME/.pellcored
+ExecStart=$(which pellcored) start --home $HOME/.pellcored
+Environment=LD_LIBRARY_PATH=$HOME/.pellcored/lib/
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+## Snapshot
+
+```
+curl https://server-5.itrocket.net/testnet/pell/pell_2024-12-30_341149_snap.tar.lz4 | lz4 -dc - | tar -xf - -C $HOME/.pellcored
+```
+
+## Register and start service
+```
+sudo systemctl daemon-reload
+sudo systemctl enable pellcored
+sudo systemctl restart pellcored && sudo journalctl -u pellcored -f -o cat
+```
