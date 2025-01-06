@@ -112,15 +112,17 @@ sed -i "s/snapshot-interval *=.*/snapshot-interval = 0/g" $HOME/.pellcored/confi
 sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.pellcored/config/config.toml
 
 # create service
-sudo tee /etc/systemd/system/pellcored.service > /dev/null << EOF
+sudo tee /etc/systemd/system/pellcored.service > /dev/null <<EOF
 [Unit]
-Description=Pell node service
+Description=Pell node
 After=network-online.target
 [Service]
 User=$USER
-ExecStart=$(which pellcored) start
+WorkingDirectory=$HOME/.pellcored
+ExecStart=$(which pellcored) start --home $HOME/.pellcored
+Environment=LD_LIBRARY_PATH=$HOME/.pellcored/lib/
 Restart=on-failure
-RestartSec=10
+RestartSec=5
 LimitNOFILE=65535
 [Install]
 WantedBy=multi-user.target
