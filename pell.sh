@@ -75,8 +75,8 @@ echo "export LD_LIBRARY_PATH=$HOME/.pellcored/lib:$LD_LIBRARY_PATH" >> $HOME/.ba
 source ~/.bash_profile
 
 # config
-pellcored config chain-id $PELL_CHAIN_ID
-pellcored config keyring-backend test
+#pellcored config chain-id $PELL_CHAIN_ID
+#pellcored config keyring-backend test
 
 # init
 pellcored init $NODENAME --chain-id $PELL_CHAIN_ID
