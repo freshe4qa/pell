@@ -120,7 +120,7 @@ After=network-online.target
 [Service]
 User=$USER
 WorkingDirectory=$HOME/.pellcored
-ExecStart=$(which pellcored) start --home $HOME/.pellcored
+ExecStart=$(which pellcored) start --home $HOME/.pellcored --chain-id=ignite_186-1
 Environment=LD_LIBRARY_PATH=$HOME/.pellcored/lib/
 Restart=on-failure
 RestartSec=5
