@@ -51,20 +51,28 @@ sudo apt update && sudo apt upgrade -y
 apt install curl iptables build-essential git wget jq make gcc nano tmux htop nvme-cli pkg-config libssl-dev libleveldb-dev tar clang bsdmainutils ncdu unzip libleveldb-dev lz4 -y
 
 # install go
-ver="1.21.3" &&
-wget "https://golang.org/dl/go$ver.linux-amd64.tar.gz" &&
-sudo rm -rf /usr/local/go &&
-sudo tar -C /usr/local -xzf "go$ver.linux-amd64.tar.gz" &&
-rm "go$ver.linux-amd64.tar.gz" &&
-echo "export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin" >> $HOME/.bash_profile &&
-source $HOME/.bash_profile &&
-go version
+cd $HOME
+VER="1.22.3"
+wget "https://golang.org/dl/go$VER.linux-amd64.tar.gz"
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz"
+rm "go$VER.linux-amd64.tar.gz"
+[ ! -f ~/.bash_profile ] && touch ~/.bash_profile
+echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
+source $HOME/.bash_profile
+[ ! -d ~/go/bin ] && mkdir -p ~/go/bin
 
 # download binary
 cd $HOME
-git clone https://github.com/0xPellNetwork.git
-cd 0xPellNetwork
-git checkout v1.1.5
+wget -O pellcored https://github.com/0xPellNetwork/network-config/releases/download/v1.1.5/pellcored-v1.1.5-linux-amd64
+chmod +x pellcored
+mv pellcored ~/go/bin/
+WASMVM_VERSION=v2.1.2
+export LD_LIBRARY_PATH=~/.pellcored/lib
+mkdir -p $LD_LIBRARY_PATH
+wget "https://github.com/CosmWasm/wasmvm/releases/download/$WASMVM_VERSION/libwasmvm.$(uname -m).so" -O "$LD_LIBRARY_PATH/libwasmvm.$(uname -m).so"
+echo "export LD_LIBRARY_PATH=$HOME/.pellcored/lib:$LD_LIBRARY_PATH" >> $HOME/.bash_profile
+source ~/.bash_profile
 
 # config
 pellcored config chain-id $PELL_CHAIN_ID
@@ -102,28 +110,28 @@ sed -i "s/snapshot-interval *=.*/snapshot-interval = 0/g" $HOME/.pellcored/confi
 
 # enable prometheus
 sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.pellcored/config/config.toml
+sed -i -e "s/^app-db-backend *=.*/app-db-backend = \"goleveldb\"/;" $HOME/.pellcored/config/app.toml
 
 # create service
-sudo tee /etc/systemd/system/pellcored.service > /dev/null << EOF
+sudo tee /etc/systemd/system/pellcored.service > /dev/null <<EOF
 [Unit]
-Description=pell node service
+Description=Pell node
 After=network-online.target
-
 [Service]
 User=$USER
-ExecStart=$(which pellcored) start
+WorkingDirectory=$HOME/.pellcored
+ExecStart=$(which pellcored) start --home $HOME/.pellcored
+Environment=LD_LIBRARY_PATH=$HOME/.pellcored/lib/
 Restart=on-failure
-RestartSec=10
+RestartSec=5
 LimitNOFILE=65535
-Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-
 [Install]
 WantedBy=multi-user.target
 EOF
 
 # reset
 pellcored tendermint unsafe-reset-all --home $HOME/.pellcored --keep-addr-book
-curl -o - -L https://config-t.noders.services/pell/data.tar.lz4 | lz4 -d | tar -x -C ~/.pellcored
+curl https://server-5.itrocket.net/testnet/pell/pell_2025-01-21_643282_snap.tar.lz4 | lz4 -dc - | tar -xf - -C $HOME/.pellcored
 
 # start service
 sudo systemctl daemon-reload
